@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Exposer le port sur lequel l'application va tourner
 EXPOSE 3000
 
-# Définir les variables d'environnement
+# Définir les variables d'environnement.
 ENV PORT=3000
 ENV PYTHONPATH=/app
 
