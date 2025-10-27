@@ -2,7 +2,7 @@ from fastapi import HTTPException
 from typing import Union
 from datetime import datetime, timedelta
 
-def next_metro(station: Union[str, None] = None):
+async def next_metro(station: Union[str, None] = None):
     # Validation
     if not station:
         raise HTTPException(status_code=400, detail="missing station parameter")

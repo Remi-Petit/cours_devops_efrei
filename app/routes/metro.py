@@ -6,5 +6,5 @@ from app.controllers.metro import next_metro
 router = APIRouter()
 
 @router.get("/next-metro")
-def get_next_metro(station: Union[str, None] = None):
-    return next_metro(station=station)
+async def get_next_metro(station: Union[str, None] = None):
+    return await next_metro(station=station)
