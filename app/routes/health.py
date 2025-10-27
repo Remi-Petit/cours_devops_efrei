@@ -1,12 +1,8 @@
 from fastapi import APIRouter
-from datetime import datetime
+from app.controllers.health import health_check
 
 router = APIRouter()
 
 @router.get("/health")
-def health_check():
-    return {
-        "status": "ok",
-        "service": "lastmetro-api",
-        "timestamp": datetime.now().isoformat()
-    }
+def get_health_check():
+    return health_check()
