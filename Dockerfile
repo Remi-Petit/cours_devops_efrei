@@ -4,14 +4,11 @@ FROM python:3.11-slim
 # Définir le répertoire de travail dans le conteneur
 WORKDIR /app
 
-# Copier le fichier requirements.txt (nous le créerons)
-COPY requirements.txt .
+# Copier le projet dans le conteneur
+COPY . .
 
 # Installer les dépendances Python
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Copier le code de l'application
-COPY main.py .
 
 # Exposer le port sur lequel l'application va tourner
 EXPOSE 3000
