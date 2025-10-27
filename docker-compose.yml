@@ -9,8 +9,6 @@ services:
     environment:
       - PORT=${API_PORT}
       - PYTHONPATH=/app
-    volumes:
-      - ./logs:/app/logs
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://${API_HOST}:${API_PORT}/health"]
