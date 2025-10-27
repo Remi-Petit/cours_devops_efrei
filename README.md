@@ -15,3 +15,5 @@
 
 ## Faire un fichier de requirements :
 * pip freeze > requirements.txt
+
+.
