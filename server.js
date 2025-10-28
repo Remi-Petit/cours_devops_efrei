@@ -5,14 +5,21 @@ const PORT = process.env.PORT || 3000;
 
 // Configuration du pool de connexions PostgreSQL
 const pool = new Pool({
+  // Connexion
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,
   database: process.env.DB_NAME || 'dernier_metro',
   user: process.env.DB_USER || 'app',
   password: process.env.DB_PASSWORD || 'app',
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+
+  // ⭐ CONNECTION POOLING - CRITICAL CONFIG
+  max: 20,                      // Maximum 20 connexions (PostgreSQL default = 100)
+  min: 2,                       // Minimum 2 connexions toujours ouvertes
+  idleTimeoutMillis: 30000,     // Fermer connexion après 30s d'inactivité
+  connectionTimeoutMillis: 2000, // Timeout si connexion prend > 2s
+
+  // ⭐ ERROR HANDLING
+  allowExitOnIdle: false,        // Ne pas exit si toutes les connexions sont idle
 });
 
 // Test de connexion au démarrage
@@ -70,41 +77,26 @@ app.get('/config', async (req, res) => {
 });
 
 // ENDPOINT 3 : Next metro (avec données de la DB)
-app.get('/next-metro', async (req, res) => {
-  const station = req.query.station;
-
-  if (!station) {
-    return res.status(400).json({ error: 'missing station parameter' });
-  }
-
+app.get('/metro-lines', async (req, res) => {
+  const client = await pool.connect();
   try {
-    // Récupérer les defaults depuis la DB
-    const result = await pool.query(
-      "SELECT value FROM config WHERE key = 'metro.defaults'"
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'config not found' });
-    }
-
-    const defaults = result.rows[0].value;
-    const headwayMin = defaults.headwayMin || 5;
-
-    // Calculer le prochain métro
-    const now = new Date();
-    const next = new Date(now.getTime() + headwayMin * 60 * 1000);
-    const nextTime = `${String(next.getHours()).padStart(2, '0')}:${String(next.getMinutes()).padStart(2, '0')}`;
-
-    res.status(200).json({
-      station: station,
-      line: defaults.line,
-      nextArrival: nextTime,
-      headwayMin: headwayMin,
-      source: 'database'
-    });
+    const result = await client.query('SELECT * FROM metro_lines');
+    res.status(200).json(result.rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error('Erreur query:', err);
+    res.status(500).json({ error: 'database error' });
+  } finally {
+    // ⭐ TOUJOURS exécuté, même si erreur!
+    client.release();
   }
+});
+
+app.get('/pool-status', (req, res) => {
+  res.status(200).json({
+    totalConnections: pool.totalCount,    // Total connexions créées
+    idleConnections: pool.idleCount,      // Connexions disponibles
+    waitingClients: pool.waitingCount,    // Clients en attente d'une connexion
+  });
 });
 
 // 404
