@@ -7,7 +7,17 @@
     "start": "node server.js",
     "dev": "nodemon server.js"
   },
-  "keywords": ["metro", "paris", "api"],
+  "keywords": [
+    "metro",
+    "paris",
+    "api"
+  ],
   "author": "Votre Nom",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
 }
