@@ -77,26 +77,165 @@ app.get('/config', async (req, res) => {
 });
 
 // ENDPOINT 3 : Next metro (avec données de la DB)
-app.get('/metro-lines', async (req, res) => {
-  const client = await pool.connect();
+app.get('/next-metro', async (req, res) => {
+  const station = req.query.station;
+
+  if (!station) {
+    return res.status(400).json({ error: 'missing station parameter' });
+  }
+
   try {
-    const result = await client.query('SELECT * FROM metro_lines');
-    res.status(200).json(result.rows);
+    // Récupérer les defaults depuis la DB
+    const result = await pool.query(
+      "SELECT value FROM config WHERE key = 'metro.defaults'"
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'config not found' });
+    }
+
+    const defaults = result.rows[0].value;
+    const headwayMin = defaults.headwayMin || 5;
+
+    // Calculer le prochain métro
+    const now = new Date();
+    const next = new Date(now.getTime() + headwayMin * 60 * 1000);
+    const nextTime = `${String(next.getHours()).padStart(2, '0')}:${String(next.getMinutes()).padStart(2, '0')}`;
+
+    res.status(200).json({
+      station: station,
+      line: defaults.line,
+      nextArrival: nextTime,
+      headwayMin: headwayMin,
+      source: 'database'
+    });
   } catch (err) {
-    console.error('Erreur query:', err);
-    res.status(500).json({ error: 'database error' });
-  } finally {
-    // ⭐ TOUJOURS exécuté, même si erreur!
-    client.release();
+    res.status(500).json({ error: err.message });
   }
 });
 
-app.get('/pool-status', (req, res) => {
-  res.status(200).json({
-    totalConnections: pool.totalCount,    // Total connexions créées
-    idleConnections: pool.idleCount,      // Connexions disponibles
-    waitingClients: pool.waitingCount,    // Clients en attente d'une connexion
-  });
+
+
+
+
+
+
+
+
+
+
+
+
+// GET /metro-lines - Lister toutes les lignes
+app.get('/metro-lines', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT id, name, color, created_at FROM metro_lines ORDER BY id'
+    );
+
+    res.status(200).json({
+      count: result.rows.length,
+      data: result.rows
+    });
+  } catch (err) {
+    console.error('Erreur GET /metro-lines:', err);
+    res.status(500).json({ error: 'database error' });
+  }
+});
+
+// GET /metro-lines/:id - Récupérer une ligne spécifique
+app.get('/metro-lines/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      'SELECT id, name, color, created_at FROM metro_lines WHERE id = $1',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'ligne non trouvée' });
+    }
+
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    console.error('Erreur GET /metro-lines/:id:', err);
+    res.status(500).json({ error: 'database error' });
+  }
+});
+
+// POST /metro-lines - Créer une nouvelle ligne
+app.post('/metro-lines', async (req, res) => {
+  const { name, color } = req.body;
+
+  // ⭐ Validation des champs requis
+  if (!name || !color) {
+    return res.status(400).json({
+      error: 'champs requis: name, color'
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      'INSERT INTO metro_lines (name, color) VALUES ($1, $2) RETURNING *',
+      [name, color]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('Erreur POST /metro-lines:', err);
+    res.status(500).json({ error: 'database error' });
+  }
+});
+
+// PUT /metro-lines/:id - Modifier une ligne
+app.put('/metro-lines/:id', async (req, res) => {
+  const { id } = req.params;
+  const { name, color } = req.body;
+
+  if (!name || !color) {
+    return res.status(400).json({
+      error: 'champs requis: name, color'
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      'UPDATE metro_lines SET name = $1, color = $2 WHERE id = $3 RETURNING *',
+      [name, color, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'ligne non trouvée' });
+    }
+
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    console.error('Erreur PUT /metro-lines/:id:', err);
+    res.status(500).json({ error: 'database error' });
+  }
+});
+
+// DELETE /metro-lines/:id - Supprimer une ligne
+app.delete('/metro-lines/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const result = await pool.query(
+      'DELETE FROM metro_lines WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'ligne non trouvée' });
+    }
+
+    // ⭐ Status 204 = Success mais pas de contenu
+    res.status(204).send();
+  } catch (err) {
+    console.error('Erreur DELETE /metro-lines/:id:', err);
+    res.status(500).json({ error: 'database error' });
+  }
 });
 
 // 404
