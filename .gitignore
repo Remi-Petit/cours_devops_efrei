@@ -1,5 +1,0 @@
-env/
-postgresql/
-__pycache__/
-.pytest_cache__/
-*.pyc

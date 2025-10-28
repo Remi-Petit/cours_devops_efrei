@@ -1,6 +1,0 @@
-env/
-log/
-tests/
-docker-compose.yml
-Dockerfile
-postgresql/
