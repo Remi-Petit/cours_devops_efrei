@@ -16,4 +16,5 @@
 ## Faire un fichier de requirements :
 * pip freeze > requirements.txt
 
-.
+# Lancer les tests
+* pytest
