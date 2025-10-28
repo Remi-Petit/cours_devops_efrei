@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # Service 1 : PostgreSQL
+  postgres:
+    image: postgres:16-alpine
+    container_name: lastmetro-db
+    environment:
+      POSTGRES_DB: dernier_metro
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+    # ports:
+    #   - "5432:5432"
+    volumes:
+      # Monter les scripts d'init
+      - ./db:/docker-entrypoint-initdb.d
+      # Persistance des données
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d dernier_metro"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Service 2 : API Node.js
+  api:
+    build: .
+    container_name: lastmetro-api
+    environment:
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: dernier_metro
+      DB_USER: app
+      DB_PASSWORD: app
+    ports:
+      - "${API_PORT}:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
