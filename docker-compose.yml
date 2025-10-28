@@ -9,8 +9,8 @@ services:
       POSTGRES_DB: dernier_metro
       POSTGRES_USER: app
       POSTGRES_PASSWORD: app
-    # ports:
-    #   - "5432:5432"
+    ports:
+      - "${DB_PORT}:5432"
     volumes:
       # Monter les scripts d'init
       - ./db:/docker-entrypoint-initdb.d
@@ -27,7 +27,6 @@ services:
     build: .
     container_name: lastmetro-api
     environment:
-      PORT: 3000
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: dernier_metro

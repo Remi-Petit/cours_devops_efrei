@@ -1,10 +1,12 @@
+const request = require('supertest');
 const express = require('express');
-require('dotenv').config();
 const { Pool } = require('pg');
-const app = express();
-const PORT = process.env.PORT || 3000;
+require('dotenv').config();
 
-// Configuration du pool de connexions PostgreSQL
+const app = express();
+app.use(express.json());
+
+// Setup pool de test
 const pool = new Pool({
   // Connexion
   host: process.env.DB_HOST || 'localhost',
@@ -23,106 +25,15 @@ const pool = new Pool({
   allowExitOnIdle: false,        // Ne pas exit si toutes les connexions sont idle
 });
 
-// Test de connexion au démarrage
-pool.query('SELECT NOW()', (err, res) => {
-  if (err) {
-    console.error('❌ Erreur de connexion à PostgreSQL:', err);
-  } else {
-    console.log('✅ Connecté à PostgreSQL à', res.rows[0].now);
-  }
-});
-
-app.use(express.json());
-
-// Logger
-app.use((req, res, next) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    console.log(`${req.method} ${req.path} -> ${res.statusCode} (${duration}ms)`);
-  });
-  next();
-});
-
-// ENDPOINT 1 : Health check (avec test DB)
-app.get('/health', async (req, res) => {
+// Endpoint de test
+app.get('/metro-lines', async (req, res) => {
   try {
-    await pool.query('SELECT 1');
-    res.status(200).json({
-      status: 'ok',
-      service: 'lastmetro-api',
-      database: 'connected',
-      timestamp: new Date().toISOString()
-    });
-  } catch (err) {
-    res.status(503).json({
-      status: 'error',
-      service: 'lastmetro-api',
-      database: 'disconnected',
-      error: err.message
-    });
-  }
-});
-
-// ENDPOINT 2 : Lire la config depuis PostgreSQL
-app.get('/config', async (req, res) => {
-  try {
-    const result = await pool.query('SELECT * FROM config ORDER BY key');
-    res.status(200).json({
-      count: result.rows.length,
-      data: result.rows
-    });
+    const result = await pool.query('SELECT * FROM metro_lines ORDER BY id');
+    res.status(200).json({ count: result.rows.length, data: result.rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-
-// ENDPOINT 3 : Next metro (avec données de la DB)
-app.get('/next-metro', async (req, res) => {
-  const station = req.query.station;
-
-  if (!station) {
-    return res.status(400).json({ error: 'missing station parameter' });
-  }
-
-  try {
-    // Récupérer les defaults depuis la DB
-    const result = await pool.query(
-      "SELECT value FROM config WHERE key = 'metro.defaults'"
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'config not found' });
-    }
-
-    const defaults = result.rows[0].value;
-    const headwayMin = defaults.headwayMin || 5;
-
-    // Calculer le prochain métro
-    const now = new Date();
-    const next = new Date(now.getTime() + headwayMin * 60 * 1000);
-    const nextTime = `${String(next.getHours()).padStart(2, '0')}:${String(next.getMinutes()).padStart(2, '0')}`;
-
-    res.status(200).json({
-      station: station,
-      line: defaults.line,
-      nextArrival: nextTime,
-      headwayMin: headwayMin,
-      source: 'database'
-    });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-
-
-
-
-
-
-
-
 
 
 
@@ -239,23 +150,93 @@ app.delete('/metro-lines/:id', async (req, res) => {
   }
 });
 
-// 404
-app.use((req, res) => {
-  res.status(404).json({ error: 'not found' });
-});
 
-// Démarrer
-app.listen(PORT, () => {
-  console.log(`🚀 DB ${pool.options.port}`);
-  console.log(`🚇 Last Metro API sur http://localhost:${PORT}`);
-  console.log(`📊 Health: http://localhost:${PORT}/health`);
-  console.log(`⚙️  Config: http://localhost:${PORT}/config`);
-});
 
-// Cleanup à l'arrêt
-process.on('SIGTERM', () => {
-  pool.end(() => {
-    console.log('Pool PostgreSQL fermé');
-    process.exit(0);
+
+
+
+
+describe('GET /metro-lines', () => {
+  test('retourne la liste des lignes', async () => {
+    const response = await request(app).get('/metro-lines');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('count');
+    expect(response.body).toHaveProperty('data');
+    expect(Array.isArray(response.body.data)).toBe(true);
+  });
+
+  test('chaque ligne a les propriétés requises', async () => {
+    const response = await request(app).get('/metro-lines');
+
+    const line = response.body.data[0];
+    expect(line).toHaveProperty('id');
+    expect(line).toHaveProperty('name');
+    expect(line).toHaveProperty('color');
   });
 });
+
+describe('POST /metro-lines', () => {
+  test('crée une nouvelle ligne', async () => {
+    const newLine = {
+      name: 'Ligne Test',
+      color: 'Bleu',
+    };
+
+    const response = await request(app)
+      .post('/metro-lines')
+      .send(newLine);
+
+    expect(response.status).toBe(201);
+    expect(response.body).toHaveProperty('id');
+    expect(response.body.name).toBe('Ligne Test');
+  });
+
+  test('rejette une ligne sans nom', async () => {
+    const response = await request(app)
+      .post('/metro-lines')
+      .send({ color: 'Rouge' });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toHaveProperty('error');
+  });
+});
+
+describe('Flow complet CREATE → GET → DELETE', () => {
+  test('cycle de vie d\'une ligne', async () => {
+    // 1. Créer
+    const createResponse = await request(app)
+      .post('/metro-lines')
+      .send({ name: 'Ligne Flow', color: 'Vert' });
+
+    expect(createResponse.status).toBe(201);
+    const lineId = createResponse.body.id;
+
+    // 2. Lire
+    const getResponse = await request(app)
+      .get(`/metro-lines/${lineId}`);
+
+    expect(getResponse.status).toBe(200);
+    expect(getResponse.body.name).toBe('Ligne Flow');
+
+    // 3. Supprimer
+    const deleteResponse = await request(app)
+      .delete(`/metro-lines/${lineId}`);
+
+    expect(deleteResponse.status).toBe(204);
+
+    // 4. Vérifier suppression
+    const getAfterDelete = await request(app)
+      .get(`/metro-lines/${lineId}`);
+
+    expect(getAfterDelete.status).toBe(404);
+  });
+});
+
+// Cleanup après les tests
+afterAll(async () => {
+  await pool.end();
+});
+
+// Export pour les tests
+module.exports = { app, pool };
